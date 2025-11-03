@@ -66,11 +66,15 @@ def obtenerRegistroPorClave(clave):
     print(registro)
 
 def actualizarRegistro(clave, fila, nuevoValor):
+    print("Valor viejo: ", baseDatos.hgetall(clave))
+    baseDatos.hset(clave, fila, nuevoValor)
+    print("Valor nuevo: ", baseDatos.hgetall(clave))
+
 
 
 claveParaVer, claveParaActualizar, key_to_delete = creacionClaveValor()
 numeroDeClaves() 
 obtenerRegistroPorClave(claveParaVer)
-actualizarRegistro(claveParaActualizar, "valor", )
+actualizarRegistro(claveParaActualizar, "valor", 23.5)
 
 baseDatos.close()
