@@ -111,8 +111,9 @@ def actualizarRegistrosPorFiltro():
         baseDatos.hset(clave,"valor",float(baseDatos.hgetall(clave)["valor"])+1)
     print("Valores actualizados: ", [baseDatos.hgetall(clave) for clave in claves])
 
-actualizarRegistrosPorFiltro()
-
+# 13 - Eliminar una serie de registros en base a un filtro (0.5 puntos)
+def eliminarPorFiltro():
+    claves = 
 
 
 
@@ -140,6 +141,8 @@ def main():
     print("11 - Obtener y mostrar varios registros y filtrarlos por un valor en concreto. (0.5 puntos)")
     obtenerRegistrosFiltrados()
     print("12 - Actualizar una serie de registros en base a un filtro (por ejemplo aumentar su valor en 1 )(0.5 puntos)")
+    actualizarRegistrosPorFiltro()
+    print("13 - Eliminar una serie de registros en base a un filtro (0.5 puntos)")
 
 
 
