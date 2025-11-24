@@ -113,8 +113,11 @@ def actualizarRegistrosPorFiltro():
 
 # 13 - Eliminar una serie de registros en base a un filtro (0.5 puntos)
 def eliminarPorFiltro():
-    claves = 
-
+    claves = [clave for clave in baseDatos.keys() if baseDatos.hgetall(clave)["unidad"] == "C"]
+    print("Valores sin eliminar: ", [baseDatos.hgetall(clave) for clave in claves])
+    for clave in claves:
+        baseDatos.delete(clave)
+    print("Todos los valores menos los eliminados: ", [baseDatos.hvals(clave) for clave in baseDatos.keys()])
 
 
 def main():
@@ -143,6 +146,8 @@ def main():
     print("12 - Actualizar una serie de registros en base a un filtro (por ejemplo aumentar su valor en 1 )(0.5 puntos)")
     actualizarRegistrosPorFiltro()
     print("13 - Eliminar una serie de registros en base a un filtro (0.5 puntos)")
+    eliminarPorFiltro()
+    print("")
 
 
 
