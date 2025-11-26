@@ -1,5 +1,6 @@
 import redis as r
 import time
+import json
 conexionRedis = r.ConnectionPool(host='localhost', port=6379, db=0,decode_responses=True)
 baseDatos = r.Redis(connection_pool=conexionRedis)
 
@@ -119,6 +120,133 @@ def eliminarPorFiltro():
         baseDatos.delete(clave)
     print("Todos los valores menos los eliminados: ", [baseDatos.hvals(clave) for clave in baseDatos.keys()])
 
+# 14 - Crear estructura JSON (array) de los datos a almacenar (0.5 puntos)
+def crearEstructuraJsonArray():
+    registros = [
+        {"id_sensor": "1", "fecha": "2025-11-01 10:00:00", "valor": 75.2, "unidad": "dB"},
+        {"id_sensor": "2", "fecha": "2025-11-01 10:01:00", "valor": 26.5, "unidad": "C"},
+        {"id_sensor": "1", "fecha": "2025-11-01 10:02:00", "valor": 80.9, "unidad": "dB"},
+        {"id_sensor": "3", "fecha": "2025-11-01 10:03:00", "valor": 55.0, "unidad": "dB"},
+    ]
+    json_str = json.dumps(registros)
+    baseDatos.set("sensores:json", json_str)
+
+    print("Json creado: ",registros)
+
+# 15 - Filtrar por cada atributo de la estructura JSON anterior (0.5 puntos)
+def filtrarJsonPorAtributo(atributo, valor):
+    json_str = baseDatos.get("sensores:json")
+    if not json_str:
+        print("No existe 'sensores:json'.")
+        return []
+    registros = json.loads(json_str)
+    resultado = []
+    if atributo == "valor" and isinstance(valor, str) and ':' in valor:
+        minv, maxv = valor.split(":")
+        minv = float(minv); maxv = float(maxv)
+        resultado = [r for r in registros if minv <= float(r.get("valor", 0)) <= maxv]
+    else:
+        for r in registros:
+            if atributo not in r:
+                continue
+            try:
+                if isinstance(r[atributo], (int, float)) or isinstance(valor, (int, float)):
+                    if float(r[atributo]) == float(valor):
+                        resultado.append(r)
+                else:
+                    if str(r[atributo]) == str(valor):
+                        resultado.append(r)
+            except Exception:
+                if str(r[atributo]) == str(valor):
+                    resultado.append(r)
+
+    print(f"Filtrado por {atributo} = {valor}: {resultado}")
+
+# 16 - Crear una lista en Redis (0.25 puntos)
+def crearListaRedis():
+    alertas = [
+        {"alerta_id": "a1", "mensaje": "Nivel de ruido alto", "nivel": 80},
+        {"alerta_id": "a2", "mensaje": "Temperatura alta", "nivel": 27},
+        {"alerta_id": "a3", "mensaje": "Batería baja", "nivel": 15}
+    ]
+    baseDatos.delete("lista_alertas")
+    for item in alertas:
+        baseDatos.rpush("lista_alertas", json.dumps(item))
+    print("Lista de redis: ", alertas)
+
+# 17 - Obtener elementos de una lista con un filtro en concreto (0.5 puntos)
+def obtenerElementosListaFiltrados(substring=None, key="lista_alertas"):
+    longitud = baseDatos.llen(key)
+    elementos = baseDatos.lrange(key, 0, longitud - 1)
+    objetos = [json.loads(e) for e in elementos]
+    if substring is None:
+        resultado = objetos
+    else:
+        resultado = [o for o in objetos if substring.lower() in json.dumps(o).lower()]
+    print(f"Elementos en '{key}' filtrados por '{substring}': {resultado}")
+
+# 18 - Crear datos con índices (esquema con al menos 3 campos) (0.5 puntos)
+def crearRegistrosIndexados():
+    registros = [
+        {"key": "registro_idx:1", "id_sensor": "1", "fecha": "2025-11-01 10:00", "valor": 75.2, "unidad": "dB"},
+        {"key": "registro_idx:2", "id_sensor": "2", "fecha": "2025-11-01 10:01", "valor": 26.5, "unidad": "C"},
+        {"key": "registro_idx:3", "id_sensor": "1", "fecha": "2025-11-01 10:02", "valor": 80.9, "unidad": "dB"},
+        {"key": "registro_idx:4", "id_sensor": "3", "fecha": "2025-11-01 10:03", "valor": 55.0, "unidad": "dB"},
+    ]
+    baseDatos.delete("index:all")
+    for r in registros:
+        key = r["key"]
+        baseDatos.hset(key, mapping={
+            "id_sensor": r["id_sensor"],
+            "fecha": r["fecha"],
+            "valor": r["valor"],
+            "unidad": r["unidad"]
+        })
+        baseDatos.sadd("index:all", key)
+        baseDatos.sadd(f"index:id_sensor:{r['id_sensor']}", key)
+        baseDatos.sadd(f"index:unidad:{r['unidad']}", key)
+        try:
+            baseDatos.zadd("zindex:valor", {key: float(r["valor"])})
+        except Exception:
+            baseDatos.zadd("zindex:valor", {key: float(r["valor"])})
+    print("Registros indexados: ", [r["key"] for r in registros])
+
+# 19 - Búsqueda con índices en base a un campo (0.5 puntos)
+def buscarPorIndice(campo, valor):
+    resultados = []
+    if campo == "id_sensor":
+        miembros = baseDatos.smembers(f"index:id_sensor:{valor}")
+        resultados = [baseDatos.hgetall(m) for m in miembros]
+    elif campo == "unidad":
+        miembros = baseDatos.smembers(f"index:unidad:{valor}")
+        resultados = [baseDatos.hgetall(m) for m in miembros]
+    elif campo == "valor":
+        if isinstance(valor, str) and ":" in valor:
+            minv, maxv = valor.split(":")
+            members = baseDatos.zrangebyscore("zindex:valor", float(minv), float(maxv))
+            resultados = [baseDatos.hgetall(m) for m in members]
+        else:
+            score = float(valor)
+            members = baseDatos.zrangebyscore("zindex:valor", score, score)
+            resultados = [baseDatos.hgetall(m) for m in members]
+    else:
+        print("No se puede filtrar por este campo")
+    print(f"Resultados búsqueda por índice {campo} = {valor}: {resultados}")
+
+# 20 - Realiza un group by usando los índices (0.5 puntos)
+def groupByIndice(campo):
+    miembros = baseDatos.smembers("index:all")
+    agrupacion = {}
+    for m in miembros:
+        h = baseDatos.hgetall(m)
+        if not h:
+            continue
+        valor = h.get(campo, None)
+        agrupacion[valor] = agrupacion.get(valor, 0) + 1
+    print(f"Group by '{campo}': {agrupacion}")
+    return agrupacion
+
+# ------------------------
 
 def main():
     print("1- Crear registros clave-valor(0.25 puntos)")
@@ -147,8 +275,21 @@ def main():
     actualizarRegistrosPorFiltro()
     print("13 - Eliminar una serie de registros en base a un filtro (0.5 puntos)")
     eliminarPorFiltro()
-    print("")
+    print("14 - Crear una estructura en JSON de array de los datos que vayais a almacenar(0.5 puntos)")
+    crearEstructuraJsonArray()
+    print("15 - Realizar un filtro por cada atributo de la estructura JSON anterior (0.5 puntos)")
+    filtrarJsonPorAtributo("unidad", "dB")
+    print("16 - Crear una lista en Redis (0.25 puntos)")
+    crearListaRedis()
+    print("17 - Obtener elementos de una lista con un filtro en concreto(0.5 puntos)")
+    obtenerElementosListaFiltrados("Temperatura")
+    print("18 - Crea datos con índices, definiendo un esquema de al menos tres campos (0.5 puntos)")
+    crearRegistrosIndexados()
+    print("19 - Realiza una búsqueda con índices en base a un campo(0.5 puntos")
+    buscarPorIndice("unidad", "dB")
+    print("20 - Realiza un group  by usando los índices(0.5 puntos)")
+    groupByIndice("id_sensor")
 
-
-
-baseDatos.close()
+if __name__ == '__main__':
+    main()
+    baseDatos.close()
